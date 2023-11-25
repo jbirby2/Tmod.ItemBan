@@ -1,0 +1,3 @@
+displayName = Item Ban!
+author = Joe Irby
+version = 0.1
