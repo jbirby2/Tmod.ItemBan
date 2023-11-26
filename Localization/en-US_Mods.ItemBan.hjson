@@ -1,1 +1,17 @@
+Items: {
+	BannedItem: {
+		DisplayName: Banned Item
+		Tooltip: ""
+	}
+}
 
+Configs: {
+	ClientConfig: {
+		DisplayName: Client Config
+
+		AllowBannedItemsInSinglePlayer: {
+			Label: Allow Banned Items in Single Player
+			Tooltip: ""
+		}
+	}
+}
