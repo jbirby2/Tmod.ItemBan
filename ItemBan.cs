@@ -5,13 +5,19 @@ using Terraria;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Data;
 
 namespace ItemBan
 {
 	public class ItemBan : Mod
 	{
         public static int BannedItemType { get; private set; }
-        public static List<Func<Item, bool>> BanDeciders = new List<Func<Item, bool>>();
+        private static List<Func<Item, bool>> onDecideBanCallbacks = new List<Func<Item, bool>>();
+        private static List<Action<Item, Item>> onItemBannedCallbacks = new List<Action<Item, Item>>();
+        private static List<Action> onBansCompleteCallbacks = new List<Action>();
+
 
         public override void PostSetupContent()
         {
@@ -27,29 +33,95 @@ namespace ItemBan
 
             switch (((string)args[0]).Trim().ToUpper())
             {
-                case "REGISTERBANDECIDER":
-                    if (args.Length != 2)
+                case "GETBANNEDITEMTYPE":
+                    if (args.Length != 1)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
-                    else if (!(args[1] is Func<Item, bool>))
-                        throw new ArgumentException("Second argument must be a Func<Item, bool>", nameof(args));
 
-                    var newDecider = (Func<Item, bool>)args[1];
+                    return BannedItemType;
 
-                    if (!BanDeciders.Contains(newDecider))
-                        BanDeciders.Add(newDecider);
+                case "DECIDEBANS":
+                    if (args.Length != 1)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+
+                    DecideBans();
 
                     return null;
 
-                case "UNREGISTERBANDECIDER":
+                case "ONDECIDEBAN":
                     if (args.Length != 2)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
                     else if (!(args[1] is Func<Item, bool>))
                         throw new ArgumentException("Second argument must be a Func<Item, bool>", nameof(args));
 
-                    var decider = (Func<Item, bool>)args[1];
+                    var newDecideCallback = (Func<Item, bool>)args[1];
 
-                    if (BanDeciders.Contains(decider))
-                        BanDeciders.Remove(decider);
+                    if (!onDecideBanCallbacks.Contains(newDecideCallback))
+                        onDecideBanCallbacks.Add(newDecideCallback);
+
+                    return null;
+
+                case "OFFDECIDEBAN":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Func<Item, bool>))
+                        throw new ArgumentException("Second argument must be a Func<Item, bool>", nameof(args));
+
+                    var decideCallback = (Func<Item, bool>)args[1];
+
+                    if (onDecideBanCallbacks.Contains(decideCallback))
+                        onDecideBanCallbacks.Remove(decideCallback);
+
+                    return null;
+
+                case "ONITEMBANNED":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action<Item, Item>))
+                        throw new ArgumentException("Second argument must be a Action<Item, Item>", nameof(args));
+
+                    var newBannedCallback = (Action<Item, Item>)args[1];
+
+                    if (!onItemBannedCallbacks.Contains(newBannedCallback))
+                        onItemBannedCallbacks.Add(newBannedCallback);
+
+                    return null;
+
+                case "OFFITEMBANNED":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action<Item, Item>))
+                        throw new ArgumentException("Second argument must be a Action<Item, Item>", nameof(args));
+
+                    var bannedCallback = (Action<Item, Item>)args[1];
+
+                    if (onItemBannedCallbacks.Contains(bannedCallback))
+                        onItemBannedCallbacks.Remove(bannedCallback);
+
+                    return null;
+
+                case "ONBANSCOMPLETE":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action))
+                        throw new ArgumentException("Second argument must be a Action", nameof(args));
+
+                    var newBansCompleteCallback = (Action)args[1];
+
+                    if (!onBansCompleteCallbacks.Contains(newBansCompleteCallback))
+                        onBansCompleteCallbacks.Add(newBansCompleteCallback);
+
+                    return null;
+
+                case "OFFBANSCOMPLETE":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action))
+                        throw new ArgumentException("Second argument must be a Action", nameof(args));
+
+                    var bansCompleteCallback = (Action)args[1];
+
+                    if (onBansCompleteCallbacks.Contains(bansCompleteCallback))
+                        onBansCompleteCallbacks.Remove(bansCompleteCallback);
 
                     return null;
 
@@ -58,7 +130,7 @@ namespace ItemBan
             }
         }
 
-        public void ApplyRulesToPlayerInventory()
+        public void DecideBans()
         {
             if (Main.netMode == NetmodeID.Server || !Main.LocalPlayer.active)
                 return;
@@ -66,14 +138,22 @@ namespace ItemBan
             bool allowBannedItemsInSinglePlayer = ModContent.GetInstance<ClientConfig>().AllowBannedItemsInSinglePlayer;
             var modPlayer = Main.LocalPlayer.GetModPlayer<ItemBanPlayer>();
 
-            bool needResync = false;
+            Logger.Debug("joestub entering loop");
+
             foreach (var item in modPlayer.GetAllActiveItems())
             {
-                // If any of the BanDeciders decide that the item is banned, then it's banned.
+                Logger.Debug("joestub looping for " + item.ToString());
+
+                // For any items currently in the player's inventory that have already been changed to BannedItems, change them back now.
+                // The code below is about to re-decide whether this item should still be banned.
+                if (item.type == ItemBan.BannedItemType)
+                    ChangeBackToOriginalItem(item);
+
+                // If any of the callbacks decide that the item is banned, then it's banned.
                 bool isItemBanned = false;
-                foreach (var decide in BanDeciders)
+                foreach (var decideCallback in onDecideBanCallbacks)
                 {
-                    isItemBanned = decide(item);
+                    isItemBanned = decideCallback(item);
 
                     if (isItemBanned)
                         break;
@@ -81,55 +161,44 @@ namespace ItemBan
 
                 bool allowBannedItem = (Main.netMode == NetmodeID.SinglePlayer && allowBannedItemsInSinglePlayer);
 
-                if (item.type == ItemBan.BannedItemType)
+                if (isItemBanned && !allowBannedItem)
                 {
-                    if (!isItemBanned || allowBannedItem)
+                    Logger.Debug("Banning item " + item.ToString());
+
+                    var originalItemClone = item.Clone();
+                    var originalType = item.type;
+                    var originalStack = item.stack;
+                    var originalPrefix = item.prefix;
+                    var originalData = item.SerializeData();
+
+                    item.ChangeItemType(ModContent.ItemType<BannedItem>());
+
+                    var bannedItem = (BannedItem)item.ModItem;
+                    bannedItem.OriginalType = originalType;
+                    bannedItem.OriginalStack = originalStack;
+                    bannedItem.OriginalPrefix = originalPrefix;
+                    bannedItem.OriginalData = originalData;
+
+                    foreach (var bannedCallback in onItemBannedCallbacks)
                     {
-                        ChangeBackToOriginalItem(item);
-                        needResync = true;
-                    }
-                }
-                else
-                {
-                    if (isItemBanned && !allowBannedItem)
-                    {
-                        ChangeToBannedItem(item);
-                        needResync = true;
+                        bannedCallback(item, originalItemClone);
                     }
                 }
             }
 
-            if (needResync && Main.netMode == NetmodeID.MultiplayerClient)
+            foreach (var bansCompleteCallback in onBansCompleteCallbacks)
+            {
+                bansCompleteCallback();
+            }
+
+            if (Main.netMode == NetmodeID.MultiplayerClient)
                 NetMessage.SendData(MessageID.SyncPlayer, -1, -1, null, Main.myPlayer);
-        }
-
-        public void ChangeToBannedItem(Item item)
-        {
-            if (!item.active || item.type == ItemID.None || item.type == BannedItemType)
-                throw new Exception("Cannot change this item into an BannedItem: " + item.ToString());
-
-            Logger.Debug("Changing item " + item.Name + " (" + item.type.ToString() + ")");
-
-            var originalType = item.type;
-            var originalStack = item.stack;
-            var originalPrefix = item.prefix;
-            var originalData = item.SerializeData();
-
-            item.ChangeItemType(ModContent.ItemType<BannedItem>());
-
-            var bannedItem = (BannedItem)item.ModItem;
-            bannedItem.OriginalType = originalType;
-            bannedItem.OriginalStack = originalStack;
-            bannedItem.OriginalPrefix = originalPrefix;
-            bannedItem.OriginalData = originalData;
         }
 
         public void ChangeBackToOriginalItem(Item item)
         {
             if (!item.active || item.type != BannedItemType)
                 throw new Exception("Cannot change this item from an BannedItem back to its original type: " + item.ToString());
-
-            Logger.Debug("Changing back item " + item.Name + " (" + item.type.ToString() + ")");
 
             var bannedItem = (BannedItem)item.ModItem;
 
@@ -142,6 +211,8 @@ namespace ItemBan
             item.stack = originalStack;
             item.Prefix(originalPrefix);
             ItemIO.Load(item, originalData);
+
+            Logger.Debug("Changed back item " + item.ToString());
         }
     }
 }

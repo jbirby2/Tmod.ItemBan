@@ -16,7 +16,17 @@ namespace ItemBan
     {
         public override void OnEnterWorld()
         {
-            ((ItemBan)this.Mod).ApplyRulesToPlayerInventory();
+            ((ItemBan)this.Mod).DecideBans();
+        }
+
+        public override bool OnPickup(Item item)
+        {
+            this.Mod.Logger.Debug("joestub ItemBanPlayer.OnPickup");
+
+            if (item.type == ItemBan.BannedItemType)
+                ((ItemBan)this.Mod).DecideBans();
+    
+            return true;
         }
 
         public IEnumerable<Item> GetAllActiveItems()

@@ -8,6 +8,7 @@ using Terraria.Localization;
 using Terraria;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
+using Terraria.ID;
 
 namespace ItemBan
 {
@@ -87,5 +88,6 @@ namespace ItemBan
         {
             tooltips.Add(new TooltipLine(this.Mod, "OriginalItem", Lang.GetItemNameValue(OriginalType) + (OriginalStack < 2 ? "" : " [" + OriginalStack.ToString() + "]")));
         }
+
     }
 }

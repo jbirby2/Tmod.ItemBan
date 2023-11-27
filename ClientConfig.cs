@@ -18,7 +18,7 @@ namespace ItemBan
 
         public override void OnChanged()
         {
-            ((ItemBan)this.Mod).ApplyRulesToPlayerInventory();
+            ((ItemBan)this.Mod).DecideBans();
         }
     }
 }
