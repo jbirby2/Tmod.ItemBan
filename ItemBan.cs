@@ -15,6 +15,7 @@ namespace ItemBan
 	{
         public static int BannedItemType { get; private set; }
         private static List<Func<Item, bool>> onDecideBanCallbacks = new List<Func<Item, bool>>();
+        private static List<Action<Item>> onInventorySlotChangedCallbacks = new List<Action<Item>>();
         private static List<Action<Item, Item>> onItemBannedCallbacks = new List<Action<Item, Item>>();
         private static List<Action> onBansCompleteCallbacks = new List<Action>();
 
@@ -44,6 +45,32 @@ namespace ItemBan
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
 
                     DecideBans();
+
+                    return null;
+
+                case "ONINVENTORYSLOTCHANGED":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action<Item>))
+                        throw new ArgumentException("Second argument must be a Action<Item>", nameof(args));
+
+                    var newSlotChangedCallback = (Action<Item>)args[1];
+
+                    if (!onInventorySlotChangedCallbacks.Contains(newSlotChangedCallback))
+                        onInventorySlotChangedCallbacks.Add(newSlotChangedCallback);
+
+                    return null;
+
+                case "OFFINVENTORYSLOTCHANGED":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action<Item>))
+                        throw new ArgumentException("Second argument must be a Action<Item>)", nameof(args));
+
+                    var slotChangedCallback = (Action<Item>)args[1];
+
+                    if (onInventorySlotChangedCallbacks.Contains(slotChangedCallback))
+                        onInventorySlotChangedCallbacks.Remove(slotChangedCallback);
 
                     return null;
 
@@ -127,6 +154,22 @@ namespace ItemBan
 
                 default:
                     throw new InvalidOperationException("Unrecognized command \"" + args[0] + "\"");
+            }
+        }
+
+        public void TriggerOnInventorySlotChanged(Item item)
+        {
+            Logger.Debug("joestub TriggerOnInventorySlotChanged " + item.ToString());
+
+            if (item.active)
+            {
+                if (item.type == ItemBan.BannedItemType)
+                    DecideBans();
+            }
+
+            foreach (var callback in onInventorySlotChangedCallbacks)
+            {
+                callback(item);
             }
         }
 
