@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader.Config;
 
 namespace ItemBan
@@ -18,7 +20,8 @@ namespace ItemBan
 
         public override void OnChanged()
         {
-            ((ItemBan)this.Mod).DecideBans();
+            if (Main.netMode != NetmodeID.Server && Main.LocalPlayer.active)
+                Main.LocalPlayer.GetModPlayer<ItemBanPlayer>().ScheduleDecideBans();
         }
     }
 }

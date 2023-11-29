@@ -14,10 +14,12 @@ namespace ItemBan
 	public class ItemBan : Mod
 	{
         public static int BannedItemType { get; private set; }
-        private static List<Func<Item, bool>> onDecideBanCallbacks = new List<Func<Item, bool>>();
-        private static List<Action<Item>> onInventorySlotChangedCallbacks = new List<Action<Item>>();
-        private static List<Action<Item, Item>> onItemBannedCallbacks = new List<Action<Item, Item>>();
-        private static List<Action> onBansCompleteCallbacks = new List<Action>();
+
+        internal static List<Action<Item>> OnInventorySlotChangedCallbacks = new List<Action<Item>>();
+        internal static List<Func<Item, bool>> OnDecideBanCallbacks = new List<Func<Item, bool>>();
+        internal static List<Action<Item, Item>> OnItemBannedCallbacks = new List<Action<Item, Item>>();
+        internal static List<Action> OnBansCompleteCallbacks = new List<Action>();
+
 
 
         public override void PostSetupContent()
@@ -44,7 +46,8 @@ namespace ItemBan
                     if (args.Length != 1)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
 
-                    DecideBans();
+                    if (Main.LocalPlayer.active)
+                        Main.LocalPlayer.GetModPlayer<ItemBanPlayer>().ScheduleDecideBans();
 
                     return null;
 
@@ -56,8 +59,8 @@ namespace ItemBan
 
                     var newSlotChangedCallback = (Action<Item>)args[1];
 
-                    if (!onInventorySlotChangedCallbacks.Contains(newSlotChangedCallback))
-                        onInventorySlotChangedCallbacks.Add(newSlotChangedCallback);
+                    if (!OnInventorySlotChangedCallbacks.Contains(newSlotChangedCallback))
+                        OnInventorySlotChangedCallbacks.Add(newSlotChangedCallback);
 
                     return null;
 
@@ -69,8 +72,8 @@ namespace ItemBan
 
                     var slotChangedCallback = (Action<Item>)args[1];
 
-                    if (onInventorySlotChangedCallbacks.Contains(slotChangedCallback))
-                        onInventorySlotChangedCallbacks.Remove(slotChangedCallback);
+                    if (OnInventorySlotChangedCallbacks.Contains(slotChangedCallback))
+                        OnInventorySlotChangedCallbacks.Remove(slotChangedCallback);
 
                     return null;
 
@@ -82,8 +85,8 @@ namespace ItemBan
 
                     var newDecideCallback = (Func<Item, bool>)args[1];
 
-                    if (!onDecideBanCallbacks.Contains(newDecideCallback))
-                        onDecideBanCallbacks.Add(newDecideCallback);
+                    if (!OnDecideBanCallbacks.Contains(newDecideCallback))
+                        OnDecideBanCallbacks.Add(newDecideCallback);
 
                     return null;
 
@@ -95,8 +98,8 @@ namespace ItemBan
 
                     var decideCallback = (Func<Item, bool>)args[1];
 
-                    if (onDecideBanCallbacks.Contains(decideCallback))
-                        onDecideBanCallbacks.Remove(decideCallback);
+                    if (OnDecideBanCallbacks.Contains(decideCallback))
+                        OnDecideBanCallbacks.Remove(decideCallback);
 
                     return null;
 
@@ -108,8 +111,8 @@ namespace ItemBan
 
                     var newBannedCallback = (Action<Item, Item>)args[1];
 
-                    if (!onItemBannedCallbacks.Contains(newBannedCallback))
-                        onItemBannedCallbacks.Add(newBannedCallback);
+                    if (!OnItemBannedCallbacks.Contains(newBannedCallback))
+                        OnItemBannedCallbacks.Add(newBannedCallback);
 
                     return null;
 
@@ -121,8 +124,8 @@ namespace ItemBan
 
                     var bannedCallback = (Action<Item, Item>)args[1];
 
-                    if (onItemBannedCallbacks.Contains(bannedCallback))
-                        onItemBannedCallbacks.Remove(bannedCallback);
+                    if (OnItemBannedCallbacks.Contains(bannedCallback))
+                        OnItemBannedCallbacks.Remove(bannedCallback);
 
                     return null;
 
@@ -134,8 +137,8 @@ namespace ItemBan
 
                     var newBansCompleteCallback = (Action)args[1];
 
-                    if (!onBansCompleteCallbacks.Contains(newBansCompleteCallback))
-                        onBansCompleteCallbacks.Add(newBansCompleteCallback);
+                    if (!OnBansCompleteCallbacks.Contains(newBansCompleteCallback))
+                        OnBansCompleteCallbacks.Add(newBansCompleteCallback);
 
                     return null;
 
@@ -147,95 +150,14 @@ namespace ItemBan
 
                     var bansCompleteCallback = (Action)args[1];
 
-                    if (onBansCompleteCallbacks.Contains(bansCompleteCallback))
-                        onBansCompleteCallbacks.Remove(bansCompleteCallback);
+                    if (OnBansCompleteCallbacks.Contains(bansCompleteCallback))
+                        OnBansCompleteCallbacks.Remove(bansCompleteCallback);
 
                     return null;
 
                 default:
                     throw new InvalidOperationException("Unrecognized command \"" + args[0] + "\"");
             }
-        }
-
-        public void TriggerOnInventorySlotChanged(Item item)
-        {
-            Logger.Debug("joestub TriggerOnInventorySlotChanged " + item.ToString());
-
-            if (item.active)
-            {
-                if (item.type == ItemBan.BannedItemType)
-                    DecideBans();
-            }
-
-            foreach (var callback in onInventorySlotChangedCallbacks)
-            {
-                callback(item);
-            }
-        }
-
-        public void DecideBans()
-        {
-            if (Main.netMode == NetmodeID.Server || !Main.LocalPlayer.active)
-                return;
-
-            bool allowBannedItemsInSinglePlayer = ModContent.GetInstance<ClientConfig>().AllowBannedItemsInSinglePlayer;
-            var modPlayer = Main.LocalPlayer.GetModPlayer<ItemBanPlayer>();
-
-            Logger.Debug("joestub entering loop");
-
-            foreach (var item in modPlayer.GetAllActiveItems())
-            {
-                Logger.Debug("joestub looping for " + item.ToString());
-
-                // For any items currently in the player's inventory that have already been changed to BannedItems, change them back now.
-                // The code below is about to re-decide whether this item should still be banned.
-                if (item.type == ItemBan.BannedItemType)
-                    ChangeBackToOriginalItem(item);
-
-                // If any of the callbacks decide that the item is banned, then it's banned.
-                bool isItemBanned = false;
-                foreach (var decideCallback in onDecideBanCallbacks)
-                {
-                    isItemBanned = decideCallback(item);
-
-                    if (isItemBanned)
-                        break;
-                }
-
-                bool allowBannedItem = (Main.netMode == NetmodeID.SinglePlayer && allowBannedItemsInSinglePlayer);
-
-                if (isItemBanned && !allowBannedItem)
-                {
-                    Logger.Debug("Banning item " + item.ToString());
-
-                    var originalItemClone = item.Clone();
-                    var originalType = item.type;
-                    var originalStack = item.stack;
-                    var originalPrefix = item.prefix;
-                    var originalData = item.SerializeData();
-
-                    item.ChangeItemType(ModContent.ItemType<BannedItem>());
-
-                    var bannedItem = (BannedItem)item.ModItem;
-                    bannedItem.OriginalType = originalType;
-                    bannedItem.OriginalStack = originalStack;
-                    bannedItem.OriginalPrefix = originalPrefix;
-                    bannedItem.OriginalData = originalData;
-
-                    foreach (var bannedCallback in onItemBannedCallbacks)
-                    {
-                        bannedCallback(item, originalItemClone);
-                    }
-                }
-            }
-
-            foreach (var bansCompleteCallback in onBansCompleteCallbacks)
-            {
-                bansCompleteCallback();
-            }
-
-            if (Main.netMode == NetmodeID.MultiplayerClient)
-                NetMessage.SendData(MessageID.SyncPlayer, -1, -1, null, Main.myPlayer);
         }
 
         public void ChangeBackToOriginalItem(Item item)
