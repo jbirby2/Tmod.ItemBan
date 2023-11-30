@@ -18,8 +18,8 @@ namespace ItemBan
         internal static List<Action<Item>> OnInventorySlotChangedCallbacks = new List<Action<Item>>();
         internal static List<Func<Item, bool>> OnDecideBanCallbacks = new List<Func<Item, bool>>();
         internal static List<Action<Item, Item>> OnItemBannedCallbacks = new List<Action<Item, Item>>();
-        internal static List<Action> OnBansCompleteCallbacks = new List<Action>();
-
+        internal static List<Action> OnClientBansCompleteCallbacks = new List<Action>();
+        internal static List<Action> OnServerBansCompleteCallbacks = new List<Action>();
 
 
         public override void PostSetupContent()
@@ -42,12 +42,22 @@ namespace ItemBan
 
                     return BannedItemType;
 
-                case "DECIDEBANS":
+                case "DECIDEBANSONCLIENT":
                     if (args.Length != 1)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
 
                     if (Main.LocalPlayer.active)
                         Main.LocalPlayer.GetModPlayer<ItemBanPlayer>().ScheduleDecideBans();
+
+                    return null;
+
+                case "DECIDEBANSONSERVER":
+                    if (args.Length != 1)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+
+                    var worldSystem = ModContent.GetInstance<ItemBanSystem>();
+                    if (worldSystem != null)
+                        worldSystem.ScheduleDecideBansOnServer();
 
                     return null;
 
@@ -129,29 +139,55 @@ namespace ItemBan
 
                     return null;
 
-                case "ONBANSCOMPLETE":
+                case "ONCLIENTBANSCOMPLETE":
                     if (args.Length != 2)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
                     else if (!(args[1] is Action))
                         throw new ArgumentException("Second argument must be a Action", nameof(args));
 
-                    var newBansCompleteCallback = (Action)args[1];
+                    var newClientBansCompleteCallback = (Action)args[1];
 
-                    if (!OnBansCompleteCallbacks.Contains(newBansCompleteCallback))
-                        OnBansCompleteCallbacks.Add(newBansCompleteCallback);
+                    if (!OnClientBansCompleteCallbacks.Contains(newClientBansCompleteCallback))
+                        OnClientBansCompleteCallbacks.Add(newClientBansCompleteCallback);
 
                     return null;
 
-                case "OFFBANSCOMPLETE":
+                case "OFFCLIENTBANSCOMPLETE":
                     if (args.Length != 2)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
                     else if (!(args[1] is Action))
                         throw new ArgumentException("Second argument must be a Action", nameof(args));
 
-                    var bansCompleteCallback = (Action)args[1];
+                    var clientBansCompleteCallback = (Action)args[1];
 
-                    if (OnBansCompleteCallbacks.Contains(bansCompleteCallback))
-                        OnBansCompleteCallbacks.Remove(bansCompleteCallback);
+                    if (OnClientBansCompleteCallbacks.Contains(clientBansCompleteCallback))
+                        OnClientBansCompleteCallbacks.Remove(clientBansCompleteCallback);
+
+                    return null;
+
+                case "ONSERVERBANSCOMPLETE":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action))
+                        throw new ArgumentException("Second argument must be a Action", nameof(args));
+
+                    var newServerBansCompleteCallback = (Action)args[1];
+
+                    if (!OnServerBansCompleteCallbacks.Contains(newServerBansCompleteCallback))
+                        OnServerBansCompleteCallbacks.Add(newServerBansCompleteCallback);
+
+                    return null;
+
+                case "OFFSERVERBANSCOMPLETE":
+                    if (args.Length != 2)
+                        throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
+                    else if (!(args[1] is Action))
+                        throw new ArgumentException("Second argument must be a Action", nameof(args));
+
+                    var serverBansCompleteCallback = (Action)args[1];
+
+                    if (OnServerBansCompleteCallbacks.Contains(serverBansCompleteCallback))
+                        OnServerBansCompleteCallbacks.Remove(serverBansCompleteCallback);
 
                     return null;
 
@@ -178,6 +214,52 @@ namespace ItemBan
             ItemIO.Load(item, originalData);
 
             Logger.Debug("Changed back item " + item.ToString());
+        }
+
+        public void DecideBan(Item item, ClientConfig clientConfig)
+        {
+            // For any items currently in the player's inventory that have already been changed to BannedItems, change them back now.
+            // The code below is about to re-decide whether this item should still be banned.
+            if (item.type == ItemBan.BannedItemType)
+                ChangeBackToOriginalItem(item);
+
+            Logger.Debug("Deciding ban for " + item.ToString());
+
+            // If any of the callbacks decide that the item is banned, then it's banned.
+            bool isItemBanned = false;
+            foreach (var decideCallback in ItemBan.OnDecideBanCallbacks)
+            {
+                isItemBanned = decideCallback(item);
+
+                if (isItemBanned)
+                    break;
+            }
+
+            bool allowBannedItem = (Main.netMode == NetmodeID.SinglePlayer && clientConfig.AllowBannedItemsInSinglePlayer);
+
+            if (isItemBanned && !allowBannedItem)
+            {
+                Logger.Debug("Banning item " + item.ToString());
+
+                var originalItemClone = item.Clone();
+                var originalType = item.type;
+                var originalStack = item.stack;
+                var originalPrefix = item.prefix;
+                var originalData = item.SerializeData();
+
+                item.ChangeItemType(ModContent.ItemType<BannedItem>());
+
+                var bannedItem = (BannedItem)item.ModItem;
+                bannedItem.OriginalType = originalType;
+                bannedItem.OriginalStack = originalStack;
+                bannedItem.OriginalPrefix = originalPrefix;
+                bannedItem.OriginalData = originalData;
+
+                foreach (var bannedCallback in ItemBan.OnItemBannedCallbacks)
+                {
+                    bannedCallback(item, originalItemClone);
+                }
+            }
         }
     }
 }
