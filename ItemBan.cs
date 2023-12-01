@@ -238,7 +238,9 @@ namespace ItemBan
 
             bool isItemBanned = false;
 
-            if (serverConfig.BannedItems.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+            if (serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                isItemBanned = true;
+            else if (serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
                 isItemBanned = true;
             else
             {

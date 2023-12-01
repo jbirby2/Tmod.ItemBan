@@ -7,6 +7,7 @@ using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria;
 using Terraria.ModLoader.Config;
+using System.ComponentModel;
 
 namespace ItemBan
 {
@@ -14,9 +15,13 @@ namespace ItemBan
     {
         public override ConfigScope Mode => ConfigScope.ServerSide;
 
+        [DrawTicks]
+        [OptionStrings(new string[] { "Blacklist", "Whitelist" })]
+        [DefaultValue("Blacklist")]
+        public string TypeOfList;
 
         [JsonDefaultListValue("{}")]
-        public List<ItemDefinition> BannedItems = new List<ItemDefinition>();
+        public List<ItemDefinition> ItemList = new List<ItemDefinition>();
 
 
         public override void OnChanged()

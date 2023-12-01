@@ -100,8 +100,12 @@ namespace ItemBan
 
                         if (item.active)
                         {
-                            if (item.type == ItemBan.BannedItemType || serverConfig.BannedItems.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                            if (item.type == ItemBan.BannedItemType
+                                || serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type)
+                                || serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                            {
                                 ScheduleDecideBans();
+                            }
                         }
 
                         foreach (var callback in ItemBan.OnInventorySlotChangedCallbacks)

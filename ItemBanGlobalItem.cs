@@ -25,7 +25,9 @@ namespace ItemBan
             {
                 var serverConfig = ModContent.GetInstance<ServerConfig>();
 
-                if (item.type == ItemBan.BannedItemType || serverConfig.BannedItems.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                if (item.type == ItemBan.BannedItemType
+                                || serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type)
+                                || serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
                 {
                     var worldSystem = ModContent.GetInstance<ItemBanSystem>();
                     if (worldSystem != null)

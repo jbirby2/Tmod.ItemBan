@@ -22,5 +22,15 @@ Configs: {
 			Label: Banned Items
 			Tooltip: ""
 		}
+
+		TypeOfList: {
+			Label: Type Of List
+			Tooltip: ""
+		}
+
+		ItemList: {
+			Label: Item List
+			Tooltip: ""
+		}
 	}
 }
