@@ -90,6 +90,8 @@ namespace ItemBan
             // Compare to the list of inventory types from the previous Update and call TriggerOnInventorySlotChanged for any slot that has changed
             if (inventoryTypes.Count == lastUpdateInventoryTypes.Count)
             {
+                var serverConfig = ModContent.GetInstance<ServerConfig>();
+
                 for (int i = 0; i < inventoryTypes.Count; i++)
                 {
                     if (inventoryTypes[i] != lastUpdateInventoryTypes[i])
@@ -98,11 +100,8 @@ namespace ItemBan
 
                         if (item.active)
                         {
-                            // Any time a new BannedItem enters Player inventory, re-decide whether or not it still needs to be banned.
-                            if (item.type == ItemBan.BannedItemType)
+                            if (item.type == ItemBan.BannedItemType || serverConfig.BannedItems.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
                                 ScheduleDecideBans();
-
-                            // joestub: other ItemBan logic goes here
                         }
 
                         foreach (var callback in ItemBan.OnInventorySlotChangedCallbacks)
@@ -130,6 +129,7 @@ namespace ItemBan
 
             var mod = (ItemBan)this.Mod;
             var clientConfig = ModContent.GetInstance<ClientConfig>();
+            var serverConfig = ModContent.GetInstance<ServerConfig>();
 
             mod.Logger.Debug("Entering ItemBanPlayer.decideBans()");
 
@@ -138,7 +138,7 @@ namespace ItemBan
             {
                 int itemStartType = item.type;
 
-                mod.DecideBan(item, clientConfig);
+                mod.DecideBan(item, clientConfig, serverConfig);
 
                 if (item.type != itemStartType)
                     needsSync = true;

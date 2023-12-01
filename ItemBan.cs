@@ -17,7 +17,8 @@ namespace ItemBan
 
         internal static List<Action<Item>> OnInventorySlotChangedCallbacks = new List<Action<Item>>();
         internal static List<Func<Item, bool>> OnDecideBanCallbacks = new List<Func<Item, bool>>();
-        internal static List<Action<Item, Item>> OnItemBannedCallbacks = new List<Action<Item, Item>>();
+        internal static List<Func<Item, object>> OnItemPreBanCallbacks = new List<Func<Item, object>>();
+        internal static List<Action<Item, object>> OnItemPostBanCallbacks = new List<Action<Item, object>>();
         internal static List<Action> OnClientBansCompleteCallbacks = new List<Action>();
         internal static List<Action> OnServerBansCompleteCallbacks = new List<Action>();
 
@@ -113,29 +114,39 @@ namespace ItemBan
 
                     return null;
 
-                case "ONITEMBANNED":
-                    if (args.Length != 2)
+                case "ONITEMBAN":
+                    if (args.Length != 3)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
-                    else if (!(args[1] is Action<Item, Item>))
-                        throw new ArgumentException("Second argument must be a Action<Item, Item>", nameof(args));
+                    else if (!(args[1] is Func<Item, object>))
+                        throw new ArgumentException("Second argument must be a Func<Item, object>", nameof(args));
+                    else if (!(args[2] is Action<Item, object>))
+                        throw new ArgumentException("Third argument must be a Action<Item, object>", nameof(args));
 
-                    var newBannedCallback = (Action<Item, Item>)args[1];
+                    var newPreBanCallback = (Func<Item, object>)args[1];
+                    if (!OnItemPreBanCallbacks.Contains(newPreBanCallback))
+                        OnItemPreBanCallbacks.Add(newPreBanCallback);
 
-                    if (!OnItemBannedCallbacks.Contains(newBannedCallback))
-                        OnItemBannedCallbacks.Add(newBannedCallback);
+                    var newPostBanCallback = (Action<Item, object>)args[2];
+                    if (!OnItemPostBanCallbacks.Contains(newPostBanCallback))
+                        OnItemPostBanCallbacks.Add(newPostBanCallback);
 
                     return null;
 
-                case "OFFITEMBANNED":
-                    if (args.Length != 2)
+                case "OFFITEMBAN":
+                    if (args.Length != 3)
                         throw new ArgumentException("Invalid number of arguments for this command", nameof(args));
-                    else if (!(args[1] is Action<Item, Item>))
-                        throw new ArgumentException("Second argument must be a Action<Item, Item>", nameof(args));
+                    else if (!(args[1] is Func<Item, object>))
+                        throw new ArgumentException("Second argument must be a Func<Item, object>", nameof(args));
+                    else if (!(args[2] is Action<Item, object>))
+                        throw new ArgumentException("Third argument must be a Action<Item, object>", nameof(args));
 
-                    var bannedCallback = (Action<Item, Item>)args[1];
+                    var preBanCallback = (Func<Item, object>)args[1];
+                    if (OnItemPreBanCallbacks.Contains(preBanCallback))
+                        OnItemPreBanCallbacks.Remove(preBanCallback);
 
-                    if (OnItemBannedCallbacks.Contains(bannedCallback))
-                        OnItemBannedCallbacks.Remove(bannedCallback);
+                    var postBanCallback = (Action<Item, object>)args[2];
+                    if (OnItemPostBanCallbacks.Contains(postBanCallback))
+                        OnItemPostBanCallbacks.Remove(postBanCallback);
 
                     return null;
 
@@ -216,7 +227,7 @@ namespace ItemBan
             Logger.Debug("Changed back item " + item.ToString());
         }
 
-        public void DecideBan(Item item, ClientConfig clientConfig)
+        public void DecideBan(Item item, ClientConfig clientConfig, ServerConfig serverConfig)
         {
             // For any items currently in the player's inventory that have already been changed to BannedItems, change them back now.
             // The code below is about to re-decide whether this item should still be banned.
@@ -225,14 +236,20 @@ namespace ItemBan
 
             Logger.Debug("Deciding ban for " + item.ToString());
 
-            // If any of the callbacks decide that the item is banned, then it's banned.
             bool isItemBanned = false;
-            foreach (var decideCallback in ItemBan.OnDecideBanCallbacks)
-            {
-                isItemBanned = decideCallback(item);
 
-                if (isItemBanned)
-                    break;
+            if (serverConfig.BannedItems.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                isItemBanned = true;
+            else
+            {
+                // If any of the callbacks decide that the item is banned, then it's banned.
+                foreach (var decideCallback in ItemBan.OnDecideBanCallbacks)
+                {
+                    isItemBanned = decideCallback(item);
+
+                    if (isItemBanned)
+                        break;
+                }
             }
 
             bool allowBannedItem = (Main.netMode == NetmodeID.SinglePlayer && clientConfig.AllowBannedItemsInSinglePlayer);
@@ -241,7 +258,12 @@ namespace ItemBan
             {
                 Logger.Debug("Banning item " + item.ToString());
 
-                var originalItemClone = item.Clone();
+                var preBanStates = new object[OnItemPreBanCallbacks.Count];
+                for (int i = 0; i < OnItemPreBanCallbacks.Count; i++)
+                {
+                    preBanStates[i] = OnItemPreBanCallbacks[i](item);
+                }
+
                 var originalType = item.type;
                 var originalStack = item.stack;
                 var originalPrefix = item.prefix;
@@ -255,9 +277,9 @@ namespace ItemBan
                 bannedItem.OriginalPrefix = originalPrefix;
                 bannedItem.OriginalData = originalData;
 
-                foreach (var bannedCallback in ItemBan.OnItemBannedCallbacks)
+                for (int i = 0; i < OnItemPostBanCallbacks.Count; i++)
                 {
-                    bannedCallback(item, originalItemClone);
+                    OnItemPostBanCallbacks[i](item, preBanStates[i]);
                 }
             }
         }

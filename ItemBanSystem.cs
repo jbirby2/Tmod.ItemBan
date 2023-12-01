@@ -56,6 +56,7 @@ namespace ItemBan
 
             var mod = (ItemBan)this.Mod;
             var clientConfig = ModContent.GetInstance<ClientConfig>();
+            var serverConfig = ModContent.GetInstance<ServerConfig>();
 
             mod.Logger.Debug("Entering ItemBanSystem.decideBansOnServer()");
 
@@ -65,7 +66,7 @@ namespace ItemBan
                 {
                     int itemStartType = item.type;
 
-                    mod.DecideBan(item, clientConfig);
+                    mod.DecideBan(item, clientConfig, serverConfig);
 
                     if (item.type != itemStartType)
                         NetMessage.SendData(MessageID.SyncItem, -1, -1, null, item.whoAmI);

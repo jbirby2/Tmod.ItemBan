@@ -14,4 +14,13 @@ Configs: {
 			Tooltip: ""
 		}
 	}
+
+	ServerConfig: {
+		DisplayName: Server Config
+
+		BannedItems: {
+			Label: Banned Items
+			Tooltip: ""
+		}
+	}
 }
