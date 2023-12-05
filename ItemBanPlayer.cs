@@ -16,22 +16,75 @@ namespace ItemBan
     public class ItemBanPlayer : ModPlayer
     {
         private List<int> lastUpdateInventoryTypes = new List<int>();
-        private bool needToDecideBans = false;
-
+        private bool updateAllBansNextTick = false;
+        
         public override void PreUpdate()
         {
-            triggerOnInventorySlotChanged();
+            if (Main.netMode == NetmodeID.Server || !this.Player.active)
+                return;
 
-            if (needToDecideBans)
+            var mod = (ItemBan)this.Mod;
+            var serverConfig = ModContent.GetInstance<ServerConfig>();
+            var clientConfig = ModContent.GetInstance<ClientConfig>();
+
+            var allItems = GetAllItems();
+
+            // build inventoryTypes
+            var inventoryTypes = new List<int>();
+            foreach (var item in allItems)
             {
-                decideBans();
-                needToDecideBans = false;
+                inventoryTypes.Add(item.type);
             }
+
+            bool needsSync = false;
+            for (int i = 0; i < inventoryTypes.Count; i++)
+            {
+                bool updateBan = false;
+
+                if (inventoryTypes.Count != lastUpdateInventoryTypes.Count || inventoryTypes[i] != lastUpdateInventoryTypes[i])
+                {
+                    updateBan = true;
+
+                    foreach (var callback in ItemBan.OnInventorySlotChangedCallbacks)
+                    {
+                        callback(allItems[i]);
+                    }
+                }
+                else if (updateAllBansNextTick)
+                {
+                    updateBan = true;
+                }
+
+                if (updateBan)
+                {
+                    var item = allItems[i];
+
+                    if (item.active && item.type != ItemID.None)
+                    {
+                        int itemStartType = item.type;
+
+                        mod.UpdateBanStatus(item, clientConfig, serverConfig);
+
+                        if (item.type != itemStartType)
+                        {
+                            needsSync = true;
+                            inventoryTypes[i] = item.type; // since the item type has changed since inventoryTypes was built, update it
+                        }
+                    }
+                }
+            }
+
+            if (needsSync && Main.netMode == NetmodeID.MultiplayerClient)
+                NetMessage.SendData(MessageID.SyncPlayer, -1, -1, null, this.Player.whoAmI);
+
+            lastUpdateInventoryTypes = inventoryTypes;
+            updateAllBansNextTick = false;
         }
 
         public override void OnEnterWorld()
         {
-            ScheduleDecideBans();
+            lastUpdateInventoryTypes.Clear();
+            updateAllBansNextTick = true;
         }
 
         public List<Item> GetAllItems()
@@ -65,96 +118,10 @@ namespace ItemBan
             return GetAllItems().Where(item => item.active && item.type != ItemID.None).ToList();
         }
 
-        public void ScheduleDecideBans()
+        public void UpdateAllBans()
         {
-            needToDecideBans = true;
+            updateAllBansNextTick = true;
         }
 
-        // private
-
-        private void triggerOnInventorySlotChanged()
-        {
-            if (Main.netMode == NetmodeID.Server || !this.Player.active)
-                return;
-
-            var mod = (ItemBan)this.Mod;
-            var allItems = GetAllItems();
-
-            // Build the list of current inventory types
-            var inventoryTypes = new List<int>();
-            foreach (var item in allItems)
-            {
-                inventoryTypes.Add(item.type);
-            }
-
-            // Compare to the list of inventory types from the previous Update and call TriggerOnInventorySlotChanged for any slot that has changed
-            if (inventoryTypes.Count == lastUpdateInventoryTypes.Count)
-            {
-                var serverConfig = ModContent.GetInstance<ServerConfig>();
-
-                for (int i = 0; i < inventoryTypes.Count; i++)
-                {
-                    if (inventoryTypes[i] != lastUpdateInventoryTypes[i])
-                    {
-                        var item = allItems[i];
-
-                        if (item.active)
-                        {
-                            if (item.type == ItemBan.BannedItemType
-                                || serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type)
-                                || serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
-                            {
-                                ScheduleDecideBans();
-                            }
-                        }
-
-                        foreach (var callback in ItemBan.OnInventorySlotChangedCallbacks)
-                        {
-                            callback(item);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // If the total number of inventory slots changed, then redecide the bans just to be safe.
-                // This usually happens when the player opens or closes a chest.
-                ScheduleDecideBans();
-            }
-
-            // save the list for next update
-            lastUpdateInventoryTypes = inventoryTypes;
-        }
-
-        private void decideBans()
-        {
-            if (Main.netMode == NetmodeID.Server || !this.Player.active)
-                return;
-
-            var mod = (ItemBan)this.Mod;
-            var clientConfig = ModContent.GetInstance<ClientConfig>();
-            var serverConfig = ModContent.GetInstance<ServerConfig>();
-
-            mod.Logger.Debug("Entering ItemBanPlayer.decideBans()");
-
-            bool needsSync = false;
-            foreach (var item in GetAllActiveItems())
-            {
-                int itemStartType = item.type;
-
-                mod.DecideBan(item, clientConfig, serverConfig);
-
-                if (item.type != itemStartType)
-                    needsSync = true;
-            }
-
-            foreach (var bansCompleteCallback in ItemBan.OnClientBansCompleteCallbacks)
-            {
-                bansCompleteCallback();
-            }
-
-            if (needsSync && Main.netMode == NetmodeID.MultiplayerClient)
-                NetMessage.SendData(MessageID.SyncPlayer, -1, -1, null, this.Player.whoAmI);
-        }
     }
 }

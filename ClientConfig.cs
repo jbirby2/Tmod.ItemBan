@@ -22,13 +22,13 @@ namespace ItemBan
         public override void OnChanged()
         {
             if (Main.netMode != NetmodeID.Server && Main.LocalPlayer.active)
-                Main.LocalPlayer.GetModPlayer<ItemBanPlayer>().ScheduleDecideBans();
+                Main.LocalPlayer.GetModPlayer<ItemBanPlayer>().UpdateAllBans();
 
             if (Main.netMode != NetmodeID.MultiplayerClient)
             {
                 var worldSystem = ModContent.GetInstance<ItemBanSystem>();
                 if (worldSystem != null)
-                    worldSystem.ScheduleDecideBansOnServer();
+                    worldSystem.UpdateAllWorldBans();
             }
         }
     }

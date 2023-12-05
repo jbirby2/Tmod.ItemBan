@@ -15,17 +15,6 @@ namespace ItemBan
 {
     public class ItemBanSystem : ModSystem
     {
-        private bool needToDecideBansOnServer = false;
-
-        public override void PreUpdateWorld()
-        {
-            if (needToDecideBansOnServer)
-            {
-                decideBansOnServer();
-                needToDecideBansOnServer = false;
-            }
-        }
-
         public override void PreSaveAndQuit()
         {
             var mod = (ItemBan)this.Mod;
@@ -41,15 +30,7 @@ namespace ItemBan
             }
         }
 
-        public void ScheduleDecideBansOnServer()
-        {
-            needToDecideBansOnServer = true;
-        }
-
-
-        // private
-
-        private void decideBansOnServer()
+        public void UpdateAllWorldBans()
         {
             if (Main.netMode == NetmodeID.MultiplayerClient)
                 return;
@@ -66,17 +47,13 @@ namespace ItemBan
                 {
                     int itemStartType = item.type;
 
-                    mod.DecideBan(item, clientConfig, serverConfig);
+                    mod.UpdateBanStatus(item, clientConfig, serverConfig);
 
-                    if (item.type != itemStartType)
+                    if (item.type != itemStartType && Main.netMode == NetmodeID.Server)
                         NetMessage.SendData(MessageID.SyncItem, -1, -1, null, item.whoAmI);
                 }
             }
-
-            foreach (var bansCompleteCallback in ItemBan.OnServerBansCompleteCallbacks)
-            {
-                bansCompleteCallback();
-            }                
         }
+
     }
 }

@@ -1,3 +1,5 @@
+Custom.BannedBy: Banned by {0}
+
 Items: {
 	BannedItem: {
 		DisplayName: Banned Item

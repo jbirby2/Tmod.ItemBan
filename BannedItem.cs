@@ -18,6 +18,7 @@ namespace ItemBan
 {
     public class BannedItem : ModItem
     {
+        public string BannedByModName = "";
         public int OriginalType = 0;
         public int OriginalStack = 0;
         public int OriginalPrefix = 0;
@@ -58,6 +59,9 @@ namespace ItemBan
 
         public override void SaveData(TagCompound tag)
         {
+            if (!String.IsNullOrWhiteSpace(BannedByModName))
+                tag["BannedByModName"] = BannedByModName;
+
             tag["OriginalType"] = OriginalType;
             tag["OriginalStack"] = OriginalStack;
             tag["OriginalPrefix"] = OriginalPrefix;
@@ -66,6 +70,9 @@ namespace ItemBan
 
         public override void LoadData(TagCompound tag)
         {
+            if (tag.ContainsKey("BannedByModName"))
+                BannedByModName = tag.GetString("BannedByModName");
+
             OriginalType = tag.GetInt("OriginalType");
             OriginalStack = tag.GetInt("OriginalStack");
             OriginalPrefix = tag.GetInt("OriginalPrefix");
@@ -74,6 +81,7 @@ namespace ItemBan
 
         public override void NetSend(BinaryWriter writer)
         {
+            writer.Write(BannedByModName);
             writer.Write(OriginalType);
             writer.Write(OriginalStack);
             writer.Write(OriginalPrefix);
@@ -82,6 +90,7 @@ namespace ItemBan
 
         public override void NetReceive(BinaryReader reader)
         {
+            BannedByModName = reader.ReadString();
             OriginalType = reader.ReadInt32();
             OriginalStack = reader.ReadInt32();
             OriginalPrefix = reader.ReadInt32();
@@ -91,6 +100,9 @@ namespace ItemBan
         public override void ModifyTooltips(List<TooltipLine> tooltips)
         {
             tooltips.Add(new TooltipLine(this.Mod, "OriginalItem", Lang.GetItemNameValue(OriginalType) + (OriginalStack < 2 ? "" : " [" + OriginalStack.ToString() + "]")));
+
+            if (!String.IsNullOrWhiteSpace(BannedByModName))
+                tooltips.Add(new TooltipLine(this.Mod, "BannedByModName", Language.GetTextValue("Mods.ItemBan.Custom.BannedBy", BannedByModName)));
         }
 
         public override void PostDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
