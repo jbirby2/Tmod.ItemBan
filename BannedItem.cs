@@ -107,6 +107,8 @@ namespace ItemBan
 
         public override void PostDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
         {
+            // Draw the icon for the original item on top of BannedItem.png
+
             try
             {
                 Main.instance.LoadItem(OriginalType);
@@ -122,6 +124,8 @@ namespace ItemBan
         {
             try
             {
+                // Draw the icon for the original item on top of BannedItem.png
+
                 // Most of the code below is vanilla code taken from Main.Draw()
 
                 Main.instance.LoadItem(OriginalType);

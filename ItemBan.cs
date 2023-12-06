@@ -195,29 +195,30 @@ namespace ItemBan
 
             bool isItemBanned = false;
             Mod bannedByMod = null;
-            if (serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
-                isItemBanned = true;
-            else if (serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
-                isItemBanned = true;
-            else
+            if (Main.netMode != NetmodeID.SinglePlayer || !clientConfig.AllowBannedItemsInSinglePlayer)
             {
-                // If any of the callbacks decide that the item is banned, then it's banned.
-                //foreach (var decideCallback in ItemBan.OnDecideBanCallbacks)
-                for (int i = 0; i < OnDecideBanCallbacks.Count; i++)
+                if (serverConfig.TypeOfList == "Blacklist" && serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                    isItemBanned = true;
+                else if (serverConfig.TypeOfList == "Whitelist" && !serverConfig.ItemList.Any(bannedItemDefinition => bannedItemDefinition.Type == item.type))
+                    isItemBanned = true;
+                else
                 {
-                    isItemBanned = OnDecideBanCallbacks[i](item);
-
-                    if (isItemBanned)
+                    // If any of the callbacks decide that the item is banned, then it's banned.
+                    //foreach (var decideCallback in ItemBan.OnDecideBanCallbacks)
+                    for (int i = 0; i < OnDecideBanCallbacks.Count; i++)
                     {
-                        bannedByMod = OnDecideBanMods[i];
-                        break;
+                        isItemBanned = OnDecideBanCallbacks[i](item);
+
+                        if (isItemBanned)
+                        {
+                            bannedByMod = OnDecideBanMods[i];
+                            break;
+                        }
                     }
                 }
             }
-
-            bool allowBannedItem = (Main.netMode == NetmodeID.SinglePlayer && clientConfig.AllowBannedItemsInSinglePlayer);
-
-            if (isItemBanned && !allowBannedItem)
+            
+            if (isItemBanned)
             {
                 Logger.Debug("Banning item " + item.ToString());
 

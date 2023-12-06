@@ -78,6 +78,17 @@ namespace ItemBan
                 NetMessage.SendData(MessageID.SyncPlayer, -1, -1, null, this.Player.whoAmI);
 
             lastUpdateInventoryTypes = inventoryTypes;
+
+            // Ban recipes here too since they're also client-side (kind of surprised that this technique actually works)
+            if (updateAllBansNextTick)
+            {
+                foreach (var recipe in Main.recipe)
+                {
+                    if (recipe.createItem != null && recipe.createItem.type != ItemID.None)
+                        mod.UpdateBanStatus(recipe.createItem, clientConfig, serverConfig);
+                }
+            }
+
             updateAllBansNextTick = false;
         }
 
